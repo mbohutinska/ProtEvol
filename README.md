@@ -1,4 +1,5 @@
 # ProtEvol
+
 ###synNon analysis
 #Input file:
 /holcovam@nympha.metacentrum.cz/auto/plzen1/home/holcovam/ScanTools/synNon/bordel/All.inclAdded.synonNonsyn.NOfiltr.vcf.gz
@@ -86,6 +87,7 @@ holcovam@nympha.metacentrum.cz/auto/plzen1/home/holcovam/ScanTools/synNon/All.in
 holcovam@nympha.metacentrum.cz/auto/plzen1/home/holcovam/ScanTools/synNon/All.inclAdded.synonNonsyn.NOfiltr.scaff2.vcf.gz
 holcovam@nympha.metacentrum.cz/auto/plzen1/home/holcovam/ScanTools/synNon/All.inclAdded.synonNonsyn.NOfiltr.scaff1.vcf.gz.tbi
 holcovam@nympha.metacentrum.cz/auto/plzen1/home/holcovam/ScanTools/synNon/All.inclAdded.synonNonsyn.NOfiltr.scaff1.vcf.gz
+
 #ScanTools
 ###Protein evolution
 module add python34-modules-gcc
@@ -183,8 +185,6 @@ cp $SCRATCHDIR/* $DATADIR/ || export CLEAN_SCRATCH=false
 printf "\nFinished\n\n"
 
 ```
-
-PANDIN	WCATET	SECWCA	SECTET	PANWCA	PANTET	PANSEC",  "PANBAL	DINWCA	DINTET	DINSEC	DINBAL	CROWCA	CROTET	CROSEC	CROPAN	CRODIN	CROBAL	BALWCA	BALTET	BALSEC
 
 ###problem with annotation
 aa@majda:~/JICAutumn2016/finalAnalysis29Apr/data> cat tet.txt dic.txt | sort | uniq -d | wc -l
