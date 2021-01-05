@@ -14,7 +14,7 @@
 #      gene<-subset(x = inp,subset = inp$V7 %in% g)
 #      if (nrow(subset(gene,gene$V8 %in% "missense_variant"))==0) {n<-0} else 
 #        {n<-sum(subset(gene,gene$V8 %in% "missense_variant")[,10:ncol(gene)],na.rm = T)}
-#      if (nrow(subset(gene,gene$V8 %in% "synonymous_variant"))==0) {s<-0} else 
+#      if (nrow(subset(gene,gene$V8 %in% "synonymous_variant"))==0) {s<-0} else  
 #        {s<-sum(subset(gene,gene$V8 %in% "synonymous_variant")[,10:ncol(gene)],na.rm = T)}
 #      if ((n+s)<5) {check<-NA} else 
 #        {check<-1}
@@ -103,19 +103,20 @@ write.table(mtot,append = T,file = "results/meiotic.ModeOfSelection.NRP.AllLin.t
 library(data.table)
 setwd("~/JICAutumn2016/finalAnalysis29Apr/")
 con<-c("TETDIP","PANDIN","PANSEC","PANBAL","PANWCA","DINSEC","DINBAL","DINWCA","SECWCA","BALSEC","BALWCA")
+con<-c("TETDIP")
 # con<-c("CROPAN")
 al <- fread("lists/ALcodes.txt",header = F)
 #to filter for missing data: 0.9 = 90% nomissing
 mffg<-0.49
 #to filter for minimum derived allele frequency (0.15 - recommended)
-mdafP<-0.1
+mdafP<-0.15
 ##pridat az budu vedet GW treshold!!
-mdafD<-0.6
+mdafD<-0.5260489 
 for (contr in  con){
   system(command = paste("head -n 1 data/",contr,"_WS1_MS1_BPM.txt > data/",contr,".synNon_WS1_MS1_BPM.txt",sep=""))
   system(command = paste("grep -E 'missense_variant|synonymous_variant' data/",contr,"_WS1_MS1_BPM.txt >> data/",contr,".synNon_WS1_MS1_BPM.txt",sep=""))
   #  contr<-"DINTET"
-  mat <- matrix(nrow = nrow(al), ncol = 10,dimnames = list(c(),c("contr","gene","pN","pS","dN","dS","alfa","NI","DoS","name")))
+  mat <- matrix(nrow = nrow(al), ncol = 11,dimnames = list(c(),c("contr","gene","pN","pS","dN","dS","alfa","NI","DoS","p-value","name")))
   p<-fread(paste("head -n -1 data/",contr,".synNon_WS1_MS1_BPM.txt",sep = ""),header = T)
   # Histogram Colored (blue and red)
 #  png(filename = paste("results/AFS_", contr,"_",mdafP,"_",mdafD,".png"),width = 1300,height = 850,pointsize = 24)
@@ -130,9 +131,11 @@ for (contr in  con){
   p1<-subset(x = p,subset = p$AN0 > max(p$AN0)*mffg & p$AN1 > max(p$AN1)*mffg & abs(p$AFD) >= mdafP & abs(p$AFD) < mdafD)
   #filter missing data and almost fixed variants 
   d1<-subset(x = p,subset = p$AN0 > max(p$AN0)*mffg & p$AN1 > max(p$AN1)*mffg & abs(p$AFD) >= mdafD)
+  summary(abs(p1$AFD))
+  quantile(abs(p1$AFD),0.99)
   
   for (gene in readLines("lists/ALmeiotic.ALcode.tab.Name.txt"))
-  {# g='AL4G46460 SHOC'
+  {# gene='AL1G10680 PRD3'
     g<-substr(gene,1,9)
     name<-substr(gene,11,30)
     index<-which(al$V1 %in% paste(g))
@@ -140,6 +143,7 @@ for (contr in  con){
     pS<-nrow(subset(x = p1,subset = p1$ALcode %in% g & p1$ann %in% "synonymous_variant"))
     dN<-nrow(subset(x = d1,subset = d1$ALcode %in% g & d1$ann %in% "missense_variant"))
     dS<-nrow(subset(x = d1,subset = d1$ALcode %in% g & d1$ann %in% "synonymous_variant"))
+    pval<-fisher.test(matrix(c(pN, pS, dN, dS), nrow=2),alternative = "less")$p.value
     if (pS>0 & dN>0) 
     {alfa=1-(dS*pN)/(dN*pS)
     NI=(pN/pS)/(dN/dS)} else 
@@ -157,30 +161,69 @@ for (contr in  con){
     mat[as.numeric(index),7]<-alfa #to estimate the fraction (α) of substitutions driven to fixation by positive selection at the functional sites
     mat[as.numeric(index),8]<-NI
     mat[as.numeric(index),9]<-dos #Stoletzki, 2011
-    mat[as.numeric(index),10]<-name}
+    mat[as.numeric(index),10]<-pval
+    mat[as.numeric(index),11]<-name}
   write.table(mat,append = F,file = paste("results/",contr,"_mafdP_",mdafP,"_mafdD_",mdafD,"_MKT.txt",sep=""),quote = F, sep = "\t",col.names = T,row.names = F)}
+# Genome
+mat <- matrix(nrow = 1, ncol = 11,dimnames = list(c(),c()))
+pN<-nrow(subset(x = p1,p1$ann %in% "missense_variant"))
+pS<-nrow(subset(x = p1,p1$ann %in% "synonymous_variant"))
+dN<-nrow(subset(x = d1,d1$ann %in% "missense_variant"))
+dS<-nrow(subset(x = d1,d1$ann %in% "synonymous_variant"))
+pval<-fisher.test(matrix(c(pN, pS, dN, dS), nrow=2),alternative = "less")$p.value
+if (pS>0 & dN>0) 
+{alfa=1-(dS*pN)/(dN*pS)
+NI=(pN/pS)/(dN/dS)} else 
+{alfa<-"NA"
+NI<-"NA"}
+if (pS+pN>0 & dS+dN>0) 
+{dos=dN/(dN+dS)-pN/(pN+pS)} else 
+{dos<-"NA"}
+mat[1,1]<-contr
+mat[1,2]<-"Genome"
+mat[1,3]<-pN
+mat[1,4]<-pS
+mat[1,5]<-dN
+mat[1,6]<-dS
+mat[1,7]<-alfa #to estimate the fraction (α) of substitutions driven to fixation by positive selection at the functional sites
+mat[1,8]<-NI
+mat[1,9]<-dos #Stoletzki, 2011
+mat[1,10]<-pval
+mat[1,11]<-"NA"
+write.table(mat,append = T,file = paste("results/",contr,"_mafdP_",mdafP,"_mafdD_",mdafD,"_MKT.txt",sep=""),quote = F, sep = "\t",col.names = T,row.names = F)
+
+
+
 
 ###########HighFst AASs###########
-#  ###  -- THIS IS INCORPORATED INTO SCANTOOLS -- ###
-#  setwd("~/JICAutumn2016/finalAnalysis29Apr/")
-#  library(data.table)
-#  con<-c("PANDIN","PANSEC","PANBAL","PANWCA","DINSEC","DINBAL","DINWCA","SECWCA","BALSEC","BALWCA","CROPAN","CRODIN","CROSEC" # ,"CROBAL","CROWCA")
-#  con<-c("TETDIP")
-#  msum<-matrix(nrow = sum(table(con)), ncol = 16,dimnames =list(c(con),c("Smin","S1Q","Smedian","Smean","S3Q","Smax","Ssd",   "Nmin","N1Q","Nmedian","Nmean","N3Q","Nmax","Nsd","Squantile95","Squantile99")))
-#  al <- fread("lists/ALcodesAll.txt",header = F)
-#  mat <- matrix(nrow = nrow(al), ncol = sum(table(con)),dimnames = list(c(al$V1),c(con))) 
-#  for (contr in  con){
-#    indlin<-which(con %in% paste(contr))
-#    inp<-fread(paste("head -n -1 data/",contr,"_WS1_MS1_BPM.txt",sep=""),header=T)
-#    s<-subset(inp,inp$AAS %in% "synonymous_variant")
-#    n<-subset(inp,inp$AAS %in% "missense_variant")
-#    sq <- quantile(s$FstH,probs=c(.99))
-#    msum[as.numeric(indlin),1:6]<-summary (s$FstH)
-#    msum[as.numeric(indlin),7]<-sd(s$FstH)
-#    msum[as.numeric(indlin),8:13]<-summary (n$FstH)
-#    msum[as.numeric(indlin),14]<-sd(n$FstH)
-#    msum[as.numeric(indlin),15] <-quantile(s$FstH,probs=c(.95))
-#    msum[as.numeric(indlin),16]<-sq
+  ###  -- THIS IS INCORPORATED INTO SCANTOOLS -- ###
+  setwd("~/JICAutumn2016/finalAnalysis29Apr/")
+  library(data.table)
+  con<-c("TETDIP","PANDIN","PANSEC","PANBAL","PANWCA","DINSEC","DINBAL","DINWCA","SECWCA","BALSEC","BALWCA") #,"CROPAN","CRODIN","CROSEC"  ,"CROBAL","CROWCA"
+  #con<-c("TETDIP")
+  msum<-matrix(nrow = sum(table(con)), ncol = 18,dimnames =list(c(con),c("Smin","S1Q","Smedian","Smean","S3Q","Smax","Ssd", "Nmin","N1Q","Nmedian","Nmean","N3Q","Nmax","Nsd","Squantile95","Squantile99","Nquantile95","Nquantile99")))
+  al <- fread("lists/ALmeiotic.ALcode.tab.Name.txt",header = F) ##for all genes: ALcodesAll.txt
+  mat <- matrix(nrow = nrow(al), ncol = sum(table(con)),dimnames = list(c(al$V1),c(con))) 
+  for (contr in  con){ #   contr="TETDIP"
+    indlin<-which(con %in% paste(contr))
+    inp<-fread(paste("data/",contr,"_WS1_MS1_BPM.txt",sep=""),header=T)
+    inp<-as.data.frame(na.omit(inp))
+    s<-subset(inp,inp$ann %in% "synonymous_variant")
+    n<-subset(inp,inp$ann %in% "missense_variant")
+    sq <- quantile(s$FstH,probs=c(.99))
+    msum[as.numeric(indlin),1:6]<-summary (s$FstH)
+    msum[as.numeric(indlin),7]<-sd(s$FstH)
+    msum[as.numeric(indlin),8:13]<-summary (n$FstH)
+    msum[as.numeric(indlin),14]<-sd(n$FstH)
+    msum[as.numeric(indlin),15] <-quantile(s$FstH,probs=c(.95))
+    msum[as.numeric(indlin),16]<-sq
+    msum[as.numeric(indlin),17] <-quantile(n$FstH,probs=c(.95))
+    msum[as.numeric(indlin),18]<-quantile(n$FstH,probs=c(.99))
+    sq <- quantile(n$FstH,probs=c(.99))
+    
+#  } ###comment this
+ # write.table(msum,append = F,file ="results/FstStatsPerContrast_10Aug2020.txt",quote = F, sep = "\t",col.names = T,row.names = T) ###comment this!!
+  
 #    png(filename=paste("results/",contr,"_FstHperNandSHist.png", sep=""), 
 #        units = "px",
 #        width=1800, 
@@ -192,18 +235,22 @@ for (contr in  con){
 #    legend("topleft", c("synonymous","nonsynonymous"), fill=c( "red", "blue"))
 #    box()
 #    dev.off()
-#    for (g in readLines("lists/ALcodesAll.txt"))
-#    {# g='AL8G38150'
-#      index<-which(al$V1 %in% paste(g))
-#      gene<-subset(x = inp,subset = inp$ALcode %in% g & inp$AAS %in% "missense_variant")
-#      
-#      if (nrow(gene)==0) {high<-0} else 
-#      {high<-nrow(subset(gene,gene$FstH >= as.numeric(sq)))}
-#      mat[index,indlin]<-high
-#    }}
-#  write.table(mat,append = F,file = "results/FstHighperGene.AllLin.Allgenes.txt",quote = F, sep = "\t",col.names = T,row.names   = T)
-#  write.table(msum,append = F,file ="results/FstStatsPerContrast.txt",quote = F, sep = "\t",col.names = T,row.names = T)
-#  ###  -- THE END OF SCANTOOLS PART  -- ###
+    for (g in readLines("lists/ALmeiotic.ALcode.tab.Name.txt")) ##for all genes: ALcodesAll.txt
+    {# g='AL8G38150'
+      g<-substr(g,1,9)
+      index<-which(al$V1 %in% paste(g))
+      gene<-subset(x = inp,subset = inp$ALcode %in% g & inp$ann %in% "missense_variant")
+      
+      if (nrow(gene)==0) {high<-0} else 
+      {high<-nrow(subset(gene,gene$FstH >= as.numeric(sq)))}
+      mat[index,indlin]<-high
+    }}
+  write.table(mat,append = F,file = "results/FstHighperGene.AllLin.AllMeiosis.txt",quote = F, sep = "\t",col.names = T,row.names   = T)
+  write.table(msum,append = F,file ="results/FstStatsPerContrast.txt",quote = F, sep = "\t",col.names = T,row.names = T)
+  
+  msum<-as.data.frame(msum)
+  wilcox.test(msum$Squantile99,msum$Nquantile99)
+  ###  -- THE END OF SCANTOOLS PART  -- ###
 ###COPY METACENTRUM OUTPUT TO /DATA!!
 
 #####Histogram of number of high-Fst sites per gene genome-wide - for any contrast
@@ -217,7 +264,7 @@ colnames(hfall)[1]<-"TETDIP"
 fst<-read.table(paste("../FstStatsPerContrast.",quant,".txt", sep=""),header=T)
 colnames(fst)[15]<-"Squantile"
 genes<-read.table("../../lists/ALmeiotic.ALcode.tab.Name.txt",header=F)
-con<-c("TETDIP","PANDIN")
+con<-c("TETDIP")
 for (contr in  con){ # contr="TETDIP"
   indCon<-which(con %in% paste(contr))
   png(filename=paste("histGW.meiotic.highFst.",contr,quant,".png",sep=""), 
@@ -262,6 +309,7 @@ library(VennDiagram)
 library(dplyr)
 quant = 0.99 #quant = 0.999
 f1<-read.table(paste("tetraploid/fst/FstoutliersGW_",quant,".txt",sep=""),h=T)
+#   d<-subset(f1,f1$ALcode %in% genes$V1)
 for (lin in c("all_dip_tet")){ # lin = "all_dip_tet"
 if (file.exists(paste("tetraploid/",lin,"_",quant,"_overlapsSGF.intervals",sep=""))) file.remove(paste("tetraploid/",lin,"_",quant,"_overlapsSGF.intervals",sep=""))
 if (file.exists(paste("tetraploid/",lin,"_",quant,"_overlapsSGF.intervals",sep=""))) file.remove(paste("tetraploid/",lin,"_",quant,"_overlapsSGF.txt",sep=""))
@@ -455,12 +503,46 @@ for (contr in  con){ # contr="TETDIP"
 
 ####Functionality
 #alIdent
+library(ggpubr)
+
 setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/")
 d<-read.table("posSelection/FinalListDiploids7Aug.txt",h=T)
+pd<-read.table("posSelection/FinalListDiploidsPan7Aug.txt",h=T)
 t<-read.table("posSelection/FinalListTetraploids7Aug.txt", h=T)
+a<-read.table("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/pai_Malvidae/Alignment_Identities_allSites.txt",h=F)
+a<-subset(a,a$V2<10)
+novA <- cbind("A",a$V3)
 novT <- cbind("T",t$al_ident)
+novPD <- cbind(as.character(pd$contract),pd$al_ident)
 novD <- cbind("D",d$al_ident)
 all<-as.data.frame(rbind(novT,novD))
+allPD<-as.data.frame(rbind(novT,novPD)) #,novA
+
+#Only diploid-tetraploid
+allPD$V2<-as.numeric(as.character(allPD$V2))
+my_comparisons <- list( c("D", "T"), c("D","P"),c("P","T") )
+pdf("alIdent.pdf",width = 4,height = 4,pointsize = 24)
+ggviolin(allPD, x = "V1", y = "V2", fill = "V1",
+         palette = c("red","orange", "blue"),
+         add = "boxplot", add.params = list(fill = "white")) +
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif") + 
+  stat_compare_means(label.y = 1.5)
+dev.off()
+
+
+#Only diploid-tetraploid
+all$V2<-as.numeric(as.character(all$V2))
+my_comparisons <- list( c("D", "T") )
+    ggviolin(all, x = "V1", y = "V2", fill = "V1",
+             palette = c("red", "blue"),
+             add = "boxplot", add.params = list(fill = "white")) +
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif") + 
+  stat_compare_means(label.y = 1.5)
+    
+    
+    
+    
+
 png(filename=paste("functionality/al_identPloidy.png", sep=""), 
     units = "px",
     width=875, 
@@ -537,6 +619,48 @@ legend(legend = c("tetraploids", "diploids"),fill = c("blue", "red"),x = "toprig
 dev.off()
 t.test(t$delta_pI, d$delta_pI)
 wilcox.test(t$delta_pI, d$delta_pI)
+
+###Make barplots for tree
+setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/")
+d<-read.table("posSelection/FinalListDiploids7Aug.txt",h=T)
+t<-read.table("posSelection/FinalListTetraploids7Aug.txt", h=T)
+a<-data.frame(t(table(t$prot)))
+aa<-subset(a, a$Freq != 1)
+df <- aa[order(aa$Freq,decreasing = TRUE),]
+xx<-nrow(df)
+yy<-max(df$Freq)+3
+png(filename = paste("tetraploids.png"),width = 850,height = 850,pointsize = 32,bg = NA)
+dd<-barplot(df$Freq,names.arg = df$Var2,las=2,col="blue3",ylim = c(0,yy),xlim = c(0.7,13.3),axes = F,mgp = c(3, 0.3, 0))
+text(x = dd,labels = df$Freq,y = df$Freq+1.65,cex = 1.15)
+dev.off()
+
+pan<-subset(d,d$FAAD_SFAAD_Goutlier %in% "Pannonian")
+a<-data.frame(t(table(pan$prot)))
+aa<-subset(a, a$Freq != 1 & a$Freq != 0)
+df <- aa[order(aa$Freq,decreasing = TRUE),]
+png(filename = paste("pannonian.png"),width = 850,height = 850,pointsize = 32,bg = NA)
+dd<-barplot(df$Freq,names.arg = df$Var2,las=2,col="orange",ylim = c(0,yy),xlim = c(0.7,13.3),axes = F,mgp = c(3, 0.3, 0))
+text(x = dd,labels = df$Freq,y = df$Freq+1.65,cex = 1.15)
+dev.off()
+
+bal<-subset(d,d$FAAD_SFAAD_Goutlier %in% "Baltic")
+a<-data.frame(t(table(bal$prot)))
+aa<-subset(a, a$Freq != 1 & a$Freq != 0)
+df <- aa[order(aa$Freq,decreasing = TRUE),]
+png(filename = paste("baltic.png"),width = 850,height = 850,pointsize = 32,bg = NA)
+dd<-barplot(df$Freq,names.arg = df$Var2,las=2,col="magenta4",ylim = c(0,yy),xlim = c(0.7,13.3),axes = F,mgp = c(3, 0.3, 0))
+text(x = dd,labels = df$Freq,y = df$Freq+1.65,cex = 1.15)
+dev.off()
+
+sec<-subset(d,d$FAAD_SFAAD_Goutlier %in% "Secarp")
+a<-data.frame(t(table(sec$prot)))
+aa<-subset(a, a$Freq != 1 & a$Freq != 0)
+df <- aa[order(aa$Freq,decreasing = TRUE),]
+png(filename = paste("Secarp.png"),width = 850,height = 850,pointsize = 32,bg = NA)
+dd<-barplot(df$Freq,names.arg = df$Var2,las=2,col="steelblue1",ylim = c(0,yy),xlim = c(0.7,13.3),axes = F,mgp = c(3, 0.3, 0))
+text(x = dd,labels = df$Freq,y = df$Freq+1.65,cex = 1.15)
+dev.off()
+
 
 ####GO enrichment analysis
 #install.packages("hash")
@@ -696,7 +820,7 @@ ff<-read.table("../posSelection/tetraploid/fst/FstoutliersGW_0.99.txt",h=T)
 ff<-ff[!ff$ALcode %in% names(which(table(ff$ALcode) == 1)), ]
 rr<-subset(ff, ff$ALcode %in% aa)
 write.table(file = 'quantile0.99.intervals',x = cbind(as.character(rr$scaff),rr$end),sep=":",col.names = F,row.names = F,quote = F)
-system("java -Xmx10g -jar ~/Desktop/programs/GATK/GenomeAnalysisTK.jar -T SelectVariants -R ~/Desktop/references/lyrataV2/alygenomes.fasta -V ~/JICAutumn2016/heatmapPipelineAll/heatmapPipeline9March/data/All.missense.vcf -o /home/aa/alpine/scanTools/ScanTools/haplotypes300/analys.vcf -L quantile0.99.intervals")
+system("java -Xmx10g -jar ~/Desktop/programs/GATK/GenomeAnalysisTK.jar -T SelectVariants -R ~/Desktop/references/lyrataV2/alygenomes.fasta -V ~/JICAutumn2016/heatmapPipelineAll/heatmapPipeline9March/data/All.missense.vcf -o /home/aa/alpine/scanTools/ScanTools/haplotypesDiploids/analys.vcf -L quantile0.99.intervals")
 system("java -Xmx10g -jar ~/Desktop/programs/GATK/GenomeAnalysisTK.jar -T SelectVariants -R /home/aa/Desktop/references/arenosa/SCC1-4.MSH4.SMC6a.SHOC1.renamed.fasta -V /home/aa/alpine/scanTools/ScanTools/arenosa_meiosis/SHOC1.ann.vcf.gz -o /home/aa/alpine/scanTools/ScanTools/haplotypes300SHOC/SHOC.analys.vcf -L SHOC.quantile0.99.intervals")
 system("java -Xmx10g -jar ~/Desktop/programs/GATK/GenomeAnalysisTK.jar -T SelectVariants -R ~/Desktop/references/lyrataV2/alygenomes.fasta -V /home/aa/alpine/scanTools/ScanTools/zyp1a/zyp1a.ann.variant.vcf -o /home/aa/alpine/scanTools/ScanTools/haplotypes300ZYP/ZYP.analys.vcf -L quantile0.99.intervals")
 
@@ -1078,4 +1202,560 @@ for(i in 1:nrow(prot)){ # i=1
   barplot(t(as.matrix(d1)),col = c("darkslateblue", "magenta4", "grey"),border="NA", las=2,xlab = NA,ylab=NA, axes = F, axisnames = T,space=0)
   title(ylab=title, line=-1.8, cex.lab=1.2)}
 dev.off()
+
+
+###########COEVOLUTION 2020
+library(psych)
+corr.test(mtcars)$ci
+
+###BARPLOT
+setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/haplotypes/forBarplot/")
+#ALL
+aa<-as.data.frame(matrix(nrow=22,ncol=11)) # 11
+prot<-as.data.frame(c('PRD3','ZYP1A','ZYP1B','ASY1','PDS5B','DYAD','SCC4','SHOC1')) #'PRD3','ZYP1A','ZYP1B','ASY1','PDS5B','DYAD','SCC4','SHOC1'
+for(i in 1:nrow(prot)){ # i=1
+  name=as.character(paste(as.character(prot[i,1]),'.hapl.txt',sep=''))
+  title=as.character(paste(as.character(prot[i,1])))
+  d0<-read.table(name, header=T)
+  d1<-d0[c(15:36),8:10]  ##15:36 15:17,29:36
+  rownames(aa) <- d0[c(15:36),1]
+  aa[,i]<-d1[,2]
+  colnames(aa)[i]<-title}
+prot<-as.data.frame(c('ASY3','SYN1','SMG7')) #'ASY3','SYN1','SMG7'
+
+for(i in 1:nrow(prot)){ # i=1
+  name=as.character(paste(as.character(prot[i,1]),'.hapl.txt',sep=''))
+  title=as.character(paste(as.character(prot[i,1])))
+  d0<-read.table(name, header=T)
+  d1<-d0[c(15:36),14:17] ##15:36 15:17,29:36
+  rownames(aa) <- d0[c(15:36),1]
+  i=i+8 ### 8
+  aa[,i]<-d1[,2]
+  colnames(aa)[i]<-title}
+
+#ALL
+library(corrplot)
+
+pdf("HAFcorrelations_corrplot_6prot.pdf")
+M<-cor(aa)
+corrplot(M, method="circle", order="hclust",title = "All 11 admixed populations")
+#RUDERAL
+aaa<-aa[8:11,-2]
+M<-cor(aaa)
+corrplot(M, method="circle", order="hclust",title = "4 ruderal populations")
+#WCARP
+aaa<-aa[4:7,]
+M<-cor(aaa)
+corrplot(M, method="circle", order="hclust",title = "4 Wcarp. populations")
+#SCARP
+aaa<-aa[1:3,]
+M<-cor(aaa)
+corrplot(M, method="circle", order="hclust",title = "3 Scarp. populations")
+dev.off()
+
+#ALLLLLLLL
+aaa<-aa[3:14,]
+m<-apply(aa,2,mean)
+min(m)
+max(m)
+typeof(aaa)
+a1<-as.numeric(as.matrix(aaa))
+min(aaa)
+max(aaa)
+median(a1)
+mean(a1)
+summary(a1)
+mean(as.numeric(droplevels(aaa)))
+lapply(aaa, mean)
+a2<-subset(a1,a1==1)
+
+library(psych)
+aaa<-corr.test(aa,adjust = "none",use = "pairwise")
+
+pdf("HAFcorrelations_corrplot_6prot.pdf")
+
+M<-cor(aa)
+corrplot(aaa$r, method="circle", order="hclust",title = "All 22 tetraploid populations",p.mat = aaa$p,sig.level = 0.05,type = "lower",insig = "label_sig")
+dev.off()
+
+M<-cor(aa,method = "pearson")
+
+
+
+
+library(RColorBrewer)
+my_palette <- colorRampPalette(c("white","gold","red"))(n = 10)
+
+a<-corr.test(aa)$r
+write.table(a,"HAFcorrelations.txt",quote = F)
+pdf("HAFcorrelations.pdf")
+heatmap(a,symm = T,keep.dendro = F,col=my_palette)
+heatmap(abs(a),symm = T,keep.dendro = F,col=my_palette)
+
+dev.off()
+
+
+###
+
+########TETRAPLOID
+setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/haplotypes/forBarplot/")
+aa<-as.data.frame(matrix(nrow=22,ncol=11))
+prot<-as.data.frame(c('PRD3','ZYP1A','ZYP1B','ASY1','PDS5B','DYAD','SCC4','SHOC1'))
+for(i in 1:nrow(prot)){ # i=1
+  name=as.character(paste(as.character(prot[i,1]),'.hapl.txt',sep=''))
+  title=as.character(paste(as.character(prot[i,1])))
+  d0<-read.table(name, header=T)
+  d1<-d0[c(15:36),8:10]
+  rownames(aa) <- d0[c(15:36),1]
+  aa[,i]<-d1[,2]
+  colnames(aa)[i]<-title}
+prot<-as.data.frame(c('ASY3','SYN1','SMG7'))
+
+for(i in 1:nrow(prot)){ # i=1
+  name=as.character(paste(as.character(prot[i,1]),'.hapl.txt',sep=''))
+  title=as.character(paste(as.character(prot[i,1])))
+  d0<-read.table(name, header=T)
+  d1<-d0[c(15:36),14:17]
+  rownames(aa) <- d0[c(15:36),1]
+  i=i+8
+  aa[,i]<-d1[,2]
+  colnames(aa)[i]<-title}
+#ALLLLLLLL
+aaa<-aa[3:14,]
+m<-apply(aaa,2,mean)
+min(m)
+
+#####DIPLOID
+setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/haplotypes/forBarplot/")
+aa<-as.data.frame(matrix(nrow=14,ncol=11))
+prot<-as.data.frame(c('PRD3','ZYP1A','ZYP1B','ASY1','PDS5B','DYAD','SCC4','SHOC1'))
+for(i in 1:nrow(prot)){ # i=1
+  name=as.character(paste(as.character(prot[i,1]),'.hapl.txt',sep=''))
+  title=as.character(paste(as.character(prot[i,1])))
+  d0<-read.table(name, header=T)
+  d1<-d0[c(1:14),8:10]
+  rownames(aa) <- d0[c(1:14),1]
+  aa[,i]<-d1[,1]
+  colnames(aa)[i]<-title}
+prot<-as.data.frame(c('ASY3','SYN1','SMG7'))
+
+for(i in 1:nrow(prot)){ # i=1
+  name=as.character(paste(as.character(prot[i,1]),'.hapl.txt',sep=''))
+  title=as.character(paste(as.character(prot[i,1])))
+  d0<-read.table(name, header=T)
+  d1<-d0[c(1:14),14:17]
+#  rownames(aa) <- d0[c(15:36),3]
+  i=i+8
+  aa[,i]<-d1[,3]
+  colnames(aa)[i]<-title}
+
+aaa<-aa
+m<-apply(aaa,2,mean)
+min(m)
+max(m)
+
+#####PANNONIAN
+setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/haplotypes/forBarplot/")
+aa<-as.data.frame(matrix(nrow=14,ncol=3))
+prot<-as.data.frame(c('ASY3','SYN1','SMG7'))
+for(i in 1:nrow(prot)){ # i=1
+  name=as.character(paste(as.character(prot[i,1]),'.hapl.txt',sep=''))
+  title=as.character(paste(as.character(prot[i,1])))
+  d0<-read.table(name, header=T)
+  d1<-d0[c(1:14),14:17]
+  #  rownames(aa) <- d0[c(15:36),3]
+ # i=i+8
+  aa[,i]<-d1[,1]
+  colnames(aa)[i]<-title}
+
+aaa<-aa[1:3,]
+m<-apply(aaa,2,mean)
+min(m)
+max(m)
+
+
+
+
+
+
+  ############# Ts/Tv ratio
+setwd("~/JICAutumn2016/finalAnalysis29Apr/results/TsTv ratios/")
+
+s1<-read.table("scaf1.txt",h=F)
+s2<-read.table("scaf2.txt",h=F)
+s3<-read.table("scaf3.txt",h=F)
+s4<-read.table("scaf4.txt",h=F)
+s5<-read.table("scaf5.txt",h=F)
+s6<-read.table("scaf6.txt",h=F)
+s7<-read.table("scaf7.txt",h=F)
+s8<-read.table("scaf8.txt",h=F)
+s1$prop<-s1$V5/(s1$V4+s1$V5)
+s2$prop<-s2$V5/(s2$V4+s2$V5)
+s3$prop<-s3$V5/(s3$V4+s3$V5)
+s4$prop<-s4$V5/(s4$V4+s4$V5)
+s5$prop<-s5$V5/(s5$V4+s5$V5)
+s6$prop<-s6$V5/(s6$V4+s6$V5)
+s7$prop<-s7$V5/(s7$V4+s7$V5)
+s8$prop<-s8$V5/(s8$V4+s8$V5)
+
+aa<-cbind(s1$prop,s2$prop,s3$prop,s4$prop,s5$prop,s6$prop,s7$prop,s8$prop)
+tot<-apply(aa,1,mean)
+
+prot<-c("ASY1","ASY3","DYAD","PDS5B","PRD3","SCC4","SDS","SHOC1","SMG7","SYN1","ZYP1A","ZYP1B")
+for (p in prot) { #    p = "SMG7"
+a<-read.table(paste(p,".tstv_counts.txt",sep=""),h=T)
+a1<-a[,2:3]
+pr<-prop.test(x = a1$X.7.nTransitions,p = tot,n = a1$X.7.nTransitions+a1$X.8.nTransversions)
+
+tot1<-mean(tot)
+pr<-prop.test(x = 21,p = tot1,n = 42)
+
+
+print(pr$p.value)
+
+}
+
+
+###CANDIDATE PROTEINS
+
+A<-read.table("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/tetraploid/all_dip_tet_0.99_overlapsSGF.txt",h=T)
+aa<-as.data.frame(table(A$ALcode))
+aaa<-subset(aa,aa$Freq>2)
+write.table(aaa,"file:///home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/tetraploid/candidates_SGF_3moreAAS.txt",col.names = F,row.names = F,quote = F)
+
+
+aa<-read.table("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/tetraploid/candidates_SGF_3moreAAS.txt")
+bb<-read.table("/home/aa/Desktop/references/lyrataV2/genesIDsLyV2.gff")
+bb$V10<-substr(bb$V9,4,12)
+cc<-subset(bb,V10 %in% aa$V1)
+cc$V11<-paste(cc$V1,":",cc$V4,"-",cc$V5,sep="")
+write.table(cc$V11,"file:///home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/tetraploid/candidates_SGF_3moreAAS.intervals",col.names = F,row.names = F,quote = F)
+
+# ANNOTATE
+library(data.table)
+aa<-read.table("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/results/candidates_SGF_3moreAAS.txt")
+ann<-fread("/home/aa/Desktop/references/lyrataV2/LyV2_TAIR11orth_des_20181231.txt",h=T,quote="")
+mm3<-subset(ann,ann$AL %in% aa$V1)
+mm<-as.data.frame(mm3[!duplicated(mm3[,c(1)]),])
+
+ann<-fread("/home/aa/Desktop/references/lyrataV2/LyV2_TAIR10orth_des_20150927.txt",h=T)
+mm3<-subset(ann,ann$`Version-2` %in% aa$V1)
+mm<-as.data.frame(mm3[!duplicated(mm3[,c(1)]),])
+write.table(mm3,"file:///home/aa/JICAutumn2016/finalAnalysis29Apr/results/candidates_SGF_3moreAAS_withAnnotations.txt",quote = F,col.names = F,row.names = F)
+
+# HAMMING SUMMARY
+aa<-read.table("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/results/Hamming_all candidates/special_genes.txt")
+aa1<-subset(aa,aa$V2<aa$V4)
+fisher.test(matrix(c(4, 6, 52, 56), nrow=2))
+fisher.test(matrix(c(4, 52, 6, 56), nrow=2))
+
+56/108
+62/118
+
+  #### DOTPLOT
+library(data.table)
+aa<-fread("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/data/subsampled_lyrataMapped/TETDIP_WS1_MS1_BPM.txt",h=T)
+
+ge<-"AL4G46460"  #AL6G15380
+a1<-subset(aa,aa$ALcode %in% ge)
+a<-subset(aa,aa$scaff %in% a1$scaff[1] & aa$end > (min(a1$end)-6000) & aa$end < (max(a1$end)+6000))
+
+bb<-read.table("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/FinalListTetraploids7Aug.txt",h=T)
+b<-subset(bb,bb$ALcode %in% ge)
+
+
+
+    cc<-ggplot() + 
+      geom_point(data = a, aes(x=as.numeric(as.character(end)), y=abs(as.numeric(as.character(AFD)))),size = 3, alpha = 0.5) +
+      geom_point(data = b, aes(x=as.numeric(as.character(end)), y=abs(as.numeric(as.character(AFD)))),size = 3, alpha = 0.6,col="red3") + 
+      geom_rect(aes(xmin = min(a1$end), xmax = max(a1$end), ymin = -Inf, ymax = Inf),alpha=0.1) + 
+      labs(x=paste("Position on ",a1$scaff[1],sep=""), y ='AFD (diploids - tetraploids)',title = a1$ALcode[1]) +
+      theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black"),axis.text = element_text(size=12),axis.title.x = element_text(size=16),axis.title.y = element_text(size=16))
+    pdf(paste("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/",ge,".pdf",sep=""),height = 4,width = 8,pointsize = 12)
+    cc
+    dev.off()
+    
+    
+    ### Number of candidate meiosis 
+    library(data.table)
+    a<-fread("/home/aa/JICAutumn2016/finalAnalysis29Apr/data/SEC.table.repol.txt",h=F)
+    a<-subset(a,a$V8 %in% "missense_variant")
+    ag<-as.data.frame(table(a$V7))
+    ag1<-subset(ag, ag$Freq>1)
+    
+s=4
+p<-read.table("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/diploid/Pannonian_0.99_overlapsSGF.txt",h=T)
+pg<-as.data.frame(table(substr(p$ALcode,1,9)))
+pg1<-subset(pg, pg$Freq > 1)
+fisher.test(matrix(c(20000-78-nrow(pg1)-s,78-s , nrow(pg1)-s, s), nrow=2))
+
+s=0
+p<-read.table("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/diploid/Dinaric_0.99_overlapsSGF.txt",h=T)
+pg<-as.data.frame(table(substr(p$ALcode,1,9)))
+pg1<-subset(pg, pg$Freq>1)
+fisher.test(matrix(c(20000-78-nrow(pg1)-s,78-s , nrow(pg1)-s, s), nrow=2))
+
+s=2
+p<-read.table("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/diploid/Secarp_0.99_overlapsSGF.txt",h=T)
+pg<-as.data.frame(table(substr(p$ALcode,1,9)))
+pg1<-subset(pg, pg$Freq>1)
+fisher.test(matrix(c(20000-78-nrow(pg1)-s,78-s , nrow(pg1)-s, s), nrow=2))
+
+s=3
+p<-read.table("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/diploid/Baltic_0.99_overlapsSGF.txt",h=T)
+pg<-as.data.frame(table(substr(p$ALcode,1,9)))
+pg1<-subset(pg, pg$Freq>1)
+fisher.test(matrix(c(20000-78-nrow(pg1)-s,78-s , nrow(pg1)-s, s), nrow=2))
+
+s=0
+p<-read.table("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/diploid/Wcarp_0.99_overlapsSGF.txt",h=T)
+pg<-as.data.frame(table(substr(p$ALcode,1,9)))
+pg1<-subset(pg, pg$Freq>1)
+fisher.test(matrix(c(20000-78-nrow(pg1)-s,78-s , nrow(pg1)-s, s), nrow=2))
+
+s=11
+p<-read.table("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/tetraploid/all_dip_tet_0.99_overlapsSGF.txt",h=T)
+pg<-as.data.frame(table(substr(p$ALcode,1,9)))
+pg1<-subset(pg, pg$Freq>1)
+fisher.test(matrix(c(20000-78-nrow(pg1)-s,78-s , nrow(pg1)-s, s), nrow=2))
+
+###No. AAS per candidate meiosis/no meiosis
+#CANDIDATE PROTEINS
+setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/tetraploid/")
+A<-read.table("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/tetraploid/all_dip_tet_0.99_overlapsSGF.txt",h=T)
+aa<-as.data.frame(table(A$ALcode))
+aaa<-subset(aa,aa$Freq>2)
+m<-read.table("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/tetraploid/all_dip_tet_0.99_overlapsSGF.meiosis.txt",h=T)
+mm<-as.data.frame(table(m$ALcode))
+mmm<-subset(mm,mm$Freq>2)
+nm<-subset(aaa,!aaa$Var1 %in% mmm$Var1)
+zyp <- data.frame("ZYP", 25)      
+names(zyp) <- c("Var1", "Freq")  
+mmm1 <- rbind(mmm, zyp) 
+shoc <- data.frame("SHOC", 41)      
+names(shoc) <- c("Var1", "Freq")  
+mmm1 <- rbind(mmm1, shoc) 
+mmm2<-mmm[-c(2,7,9),]
+# 9 SGF
+summary(mmm)
+# 11 all
+summary(mmm1)
+# 6 denovo
+summary(mmm2)
+
+
+
+library(ggpubr)
+
+novA <- cbind("Meiotic",mmm2$Freq)
+novT <- cbind("Non-meiotic",nm$Freq)
+all<-as.data.frame(rbind(novA,novT))
+#Only diploid-tetraploid
+all$V2<-as.numeric(as.character(all$V2))
+my_comparisons <- list( c("Meiotic", "Non-meiotic") )
+pdf("NoAASs_6Denovo.pdf",width = 3.5,height = 5,pointsize = 24)
+ggviolin(all, x = "V1", y = "V2", fill = "V1",
+         palette = c("gold", "grey"),
+         add = "boxplot", add.params = list(fill = "white")) +
+  stat_compare_means(comparisons = my_comparisons, label = "p.signif") + 
+  stat_compare_means(label.y = 1.5)
+dev.off()
+
+
+
+# Rarefaction
+library(data.table)
+library(Publish)
+library(plotrix)
+setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/")
+m<-read.table("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/tetraploid/all_dip_tet_0.99_overlapsSGF.txt",h=T)
+d<-fread("DIP.table.repol.txt",h=F,na.strings = "-9")
+#head(d)
+d1<-subset(d, paste(d$V3,d$V4) %in% paste(m$scaff,m$end))
+nrep<-100
+nind<-80
+seq<-c(seq(1,20,1),seq(25,80,5))
+mat <- matrix(nrow = length(seq), ncol = nrep+4)
+mat[,1]<-seq
+for (i in 1:nrow(mat)) {  #  i = 32
+  for (num in 1:nrep) {
+    
+
+  subs<-mat[i,1]
+  aaa<-sample.int(n = nind, size = subs, replace = F)  
+  aaa<-10+aaa
+  d2<-d1[,..aaa]
+  d2$sum<-rowSums(d2,na.rm = T)
+  s<-subset(d2,d2$sum == 0)
+  mat[i,num+1]<-nrow(d2)-nrow(s)
+
+} 
+
+  ci<-ci.mean(mat[i,2:(ncol(mat)-3)])
+  mat[i,ncol(mat)-2]<-ci$lower
+  mat[i,ncol(mat)-1]<-ci$upper
+  mat[i,ncol(mat)-0]<-ci$mean
+  }
+
+pdf("rarefactionDiploids_80.pdf",width = 7,height = 4,pointsize = 10)
+plotCI(mat[,1], y = mat[,ncol(mat)-0], ui=mat[,ncol(mat)-1], li=mat[,ncol(mat)-2],xlab="Number of individuals sampled",ylab="Number of detected segregating sites")
+dev.off()
+
+
+
+###PAI - number of AASs
+setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/")
+t<-read.table("posSelection/FinalListTetraploids7Aug.txt", h=T)
+a<-read.table("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/pai_Malvidae/Alignment_Identities_allSites.txt",h=F)
+l<-read.table("../lists/ALmeiotic.ALcode.tab.Name.txt")
+l$pai<-""
+l$aas<-""
+for (i in 1:nrow(l)) { #   i=1
+  l1<-as.character(droplevels(l[i,1]))
+  a1<-subset(a,a$V6 %in% l1)
+  l$pai[i]<-mean(a1$V3)
+  t1<-subset(t,t$ALcode %in% l1)
+  l$aas[i]<-nrow(t1)
+  
+}
+
+#plot(l$aas~l$pai)
+
+plot(l$pai~l$aas)
+#abline(lm(l$pai~l$aas))
+pdf("PAI_AAS.pdf",5,5)
+plot(x = l$aas, y = l$pai, xlab= "Number of tetraploid-differentiated AASs", ylab= "Alignment identity", col= "blue", pch = 19, cex = 1, lty = "solid", lwd = 2)
+text(x = l$aas, y = as.numeric(l$pai), labels=l$V2,col = "black",pos = 4)
+abline(h=mean(as.numeric(l$pai)))
+dev.off()
+
+
+#Subsampling 16-16
+library(data.table)
+aa<-read.table("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/results/posSelection/FinalListTetraploids7Aug.txt",h=T)
+bb<-fread("/home/aa/JICAutumn2016/finalAnalysis29Apr/results/TETDIP_WS1_MS1_BPM.txt",h=T)
+b1<-subset(bb,bb$ann %in% "missense_variant")
+b2<-b1[ order(b1[,20],decreasing = T), ]
+b3<-b2[1:10861,]
+b4<-subset(b3,paste(b3$scaff,b3$AAS) %in% paste(aa$scaff,aa$AAS))
+b5<-b4[ order(b4[,7],decreasing = F), ]
+table(b5$ALcode)
+
+a1<-subset(aa,!paste(aa$scaff,aa$AAS) %in% paste(b4$scaff,b4$AAS))
+a2<-a1[1:7,]
+write.table(a2,"/home/aa/JICAutumn2016/finalAnalysis29Apr/results/missingSubsampling16_16.txt",quote = F,row.names = F)
+
+
+
+
+library(data.table)
+a<-fread("file:///home/aa/JICAutumn2016/finalAnalysis29Apr/data/subsampled_lyrataMapped/TETDIP.synNon_WS1_MS1_BPM.txt",h=T)
+s<-subset(a,a$ann %in% "synonymous_variant")
+ss<-subset(s,abs(s$AFD) == 1)
+n<-subset(a,a$ann %in% "missense_variant")
+nn<-subset(n,abs(n$AFD) == 1)
+hist(abs(s$AFD), breaks = 100, main = "AFD diploids-tetraploids synonymous")
+hist(abs(n$AFD), breaks = 100,main = "AFD diploids-tetraploids nonsynonymous")
+summary(abs(s$AFD))
+quantile(abs(s$AFD),0.99)
+summary(abs(n$AFD))
+quantile(abs(n$AFD),0.99)
+
+
+###MNM
+
+setwd("/home/aa/JICAutumn2016/finalAnalysis29Apr/data/")
+library(data.table)
+
+CHO_001_c - 16
+BRD_001_a - 10
+HOC_004_1 - 25
+SWA_002_1 - 47
+
+
+a<-fread("TET.table.repol.txt",h=F)
+a1<-subset(a,a$V8 %in% "missense_variant")
+a1<-a
+a2<-subset(a1,!a1$V47 %in% "-9")
+a3<-subset(a2,!a2$V47 %in% 0)
+a3<-subset(a2,a2$V47 %in% 4)
+
+setkey(a3, V7, V4)
+a3[, diff := V4 - shift(V4, fill = first(V4)), by = V7]
+a4<-subset(a3,!a3$diff %in% 0)
+a5<-subset(a4,!a4$V7 %like% "-")
+a6<-subset(a5,a5$diff < 9255)
+
+#   write.table(a5[,c(1,2,3,4,5,6,7,8,52)],"SNPdistances.txt",quote = F,row.names = F,col.names = F)
+
+pdf("diff_allSNPs_SWA_002_1.fixed.pdf")
+hist(a5$diff,breaks = 20000,xlab = "distance (bp)",main = "Distance between adjescent missense SNPs within a gene",xlim = c(0,10000))
+hist(a5$diff,breaks = 100000,xlab = "distance (bp)",main = "Distance between adjescent missense SNPs within a gene",xlim = c(0,2000))
+hist(a5$diff,breaks = 400000,xlab = "distance (bp)",main = "Distance between adjescent missense SNPs within a gene",xlim = c(0,500))
+dev.off()
+
+
+
+for(p in c("AL1G10680","AL1G35730","AL4G46460","AL6G30890","AL8G25590","AL8G25600","AL2G25920","AL2G37810")){ # p="AL4G46460"  p="AL6G30890"
+  
+  b2<-subset(a6,as.character(a6$V7) %in% p)
+  pdf(paste("boxplot.",p,".fixed.pdf"))
+  boxplot(a6$diff, b2$diff)
+  print(summary(a6$diff))
+  print(summary(b2$diff))
+  hist(b2$diff,nclass = 100)
+  
+  dev.off()
+  print(p)
+  print(wilcox.test(a6$diff, b2$diff))
+}
+
+b3<-subset(b1,!b1$diff %in% 0)
+pdf(paste("hist.all.fixed.pdf"))
+boxplot(a4$diff, b3$diff,names = c('genome-wide',"meiosis FstH candidates"),ylab="distance (bp)")
+dev.off()
+print(wilcox.test(a4$diff, b3$diff))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+b<-fread("High_Fst_TET.txt")
+b<-fread("../results/haplotypes/2HaplDipTet/tetraploidHIF.intervals",sep = ":",h=F)
+
+b1<-subset(a1,paste(a1$V7,a1$V9) %in% paste(b$ALcode,b$AASS))
+b1<-subset(a1,paste(a1$V3,a1$V4) %in% paste(b$V1,b$V2))
+
+setkey(b1, V7, V4)
+b1[, diff := V4 - shift(V4, fill = first(V4)), by = V7]
+b1$prot<-b$Protein
+
+for(p in unique(b1$V7)){
+  
+  b2<-subset(b1,as.character(b1$V7) %in% p)
+  b3<-subset(b2,!b2$diff %in% 0)
+  pdf(paste("hist.",p,".fixed.pdf"))
+  boxplot(a4$diff, b3$diff)
+  dev.off()
+  print(p)
+  print(wilcox.test(a4$diff, b3$diff))
+}
+
+b3<-subset(b1,!b1$diff %in% 0)
+pdf(paste("hist.all.fixed.pdf"))
+boxplot(a4$diff, b3$diff,names = c('genome-wide',"meiosis FstH candidates"),ylab="distance (bp)")
+dev.off()
+print(wilcox.test(a4$diff, b3$diff))
+
 
